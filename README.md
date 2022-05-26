@@ -18,8 +18,8 @@ differentiation in Stan; and applied to calibrate a spatial meta-population mode
 
 ## Contents:
 The repository contains two folders: 
-1- SyntheticDataExperiments;
-2- RealDataExperiments.
+1 - SyntheticDataExperiments;
+2 - RealDataExperiments.
 
 SyntheticDataExperiments collects all the experiments on synthetic data supporting the theoretical results:
 - LLN;
