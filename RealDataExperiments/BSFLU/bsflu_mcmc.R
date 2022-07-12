@@ -8,6 +8,11 @@ logprior <- function(params){
   return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,0.5), nrow = 3)))
 }
 
+## Priors
+logprior_LNA <- function(params){
+  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4)))
+}
+
 ## gibbs proposal
 
 proposal <- function(par, var, indicator = 0){
@@ -35,6 +40,44 @@ poisson_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
       
       new_Loglik <- SIR_approx_lik(y, init_pop, prop)
       prior_diff <- logprior(prop) - logprior(sample)
+      Log_lik_diff <- new_Loglik - old_Loglik
+      
+      u <- runif(1)
+      
+      if(u < exp(prior_diff + Log_lik_diff)){
+        sample <- prop
+        old_Loglik <- new_Loglik
+        accepted_params[j] = accepted_params[j] + 1
+        print('accepted')
+        print(sample)
+      }
+      else{print('rejected')}
+    }
+    param_samples[,i+1] = sample
+  }
+  
+  acceptance_ratio <- accepted_params/n_iter
+  
+  out <- list(param_samples = param_samples, acceptance_ratio = acceptance_ratio)
+}
+
+## LNA mcmc
+
+LNA_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
+  param_samples <- matrix(nrow = 4, ncol = n_iter+1)
+  param_samples[,1] <- init_params
+  ind <- c(0,0,1,0)
+  old_Loglik <- SIR_approx_lik_LNA(y, init_pop, init_params)
+  accepted_params <- c(0,0,0,0)
+  for (i in 1:n_iter) {
+    print(i)
+    sample <- param_samples[,i]
+    for (j in 1:4){
+      prop <- sample
+      prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
+      
+      new_Loglik <- SIR_approx_lik_LNA(y, init_pop, prop)
+      prior_diff <- logprior_LNA(prop) - logprior_LNA(sample)
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)
