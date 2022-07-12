@@ -1,9 +1,12 @@
 library(Rcpp)
 library(pomp)
+library(deSolve)
 sourceCpp('cpp/SIR_simulator.cpp')
 sourceCpp('cpp/Approx_SIR_filter.cpp')
 sourceCpp('cpp/SIR_particle_filter.cpp')
 source('bsflu_mcmc.R')
+source("LNA/LNA_ode_system.R")
+
 ################ Simulation study
 #Set simulation parameters
 init <- c(763-1,1,0)
@@ -101,7 +104,10 @@ init_real <- c(762,1,0)
 y <- bsflu$B
 
 ## Run mcmc or load pre run chains
-
+mcmc_chain_real <- LNA_mcmc_3param(y, init_real, c(2,0.5,0.8), 1000, rw_params = c(0.4,0.05,0.07))
+#
+mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 500, rw_params = c(0.4,0.05,0.1,0.5))
+#
 #mcmc_chain_real <- poisson_mcmc(y, init_real, c(2,0.5,0.8), 500000, rw_params = c(0.4,0.05,0.1))
 #
 #pmcmc_chain_real_vague <- pmcmc_bsflu(y, init_real, c(2,0.5,0.8), 1000, 500000,  rw_params = 1.5*c(0.4,0.05,0.1))

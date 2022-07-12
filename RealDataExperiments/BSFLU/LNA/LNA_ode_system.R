@@ -34,8 +34,9 @@ SIR_approx_lik_LNA <- function(y, init_pop, init_params){
   
   x_prev     = array(c(init_pop[1:2], 0,0, 0,0,0,0), dim = c(8,1))
   parameters = init_params[1:2]
+  parameters[1] = parameters[1]/763
   q          = init_params[3]
-  v          = init_params[4]
+  #v          = init_params[4]
   
   loglikelihood = 0 
   
@@ -45,7 +46,8 @@ SIR_approx_lik_LNA <- function(y, init_pop, init_params){
     mu_t    = x_next[1:2]
     Sigma_t = matrix(x_next[5:8], ncol = 2)
     
-    # alternative:v = mu_t[2]*q*(1-q)
+    # alternative:
+    v = mu_t[2]*q*(1-q)
     
     mu_l   = q*mu_t[2]
     Sigma_l= q*q*Sigma_t[2,2] + v
@@ -72,7 +74,7 @@ SIR_approx_filter_LNA <- function(y, init_pop, init_params){
   x_prev     = array(c(init_pop[1:2], 0,0, 0,0,0,0), dim = c(8,1))
   parameters = init_params[1:2]
   q          = init_params[3]
-  v          = init_params[4]
+  #v          = init_params[4]
   
   mean_time  = array(NA, dim = c(time_steps, 2))
   Sigma_time = array(NA, dim = c(time_steps, 2, 2))
@@ -83,7 +85,8 @@ SIR_approx_filter_LNA <- function(y, init_pop, init_params){
     mu_t    = x_next[1:2]
     Sigma_t = matrix(x_next[5:8], ncol = 2)
     
-    # alternative:v = mu_t[2]*q*(1-q)
+    # alternative:
+    v = mu_t[2]*q*(1-q)
     
     mu_l   = q*mu_t[2]
     Sigma_l= q*q*Sigma_t[2,2] + v
