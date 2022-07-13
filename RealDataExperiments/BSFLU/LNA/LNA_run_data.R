@@ -42,3 +42,13 @@ for(i in 1:length(q_grid)){
   lik[i] = SIR_approx_lik_LNA(y, init_pop, init_params)
 }
 plot(q_grid,lik)
+
+
+v_grid = seq(100, 1000, length=50)
+lik = c()
+for(i in 1:length(v_grid)){
+  #print(i)
+  init_params = array(c(2, 0.5, 0.8, v_grid[i]))
+  lik[i] = SIR_approx_lik_LNA(y, init_pop, init_params)
+}
+plot(v_grid,lik)

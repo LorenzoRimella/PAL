@@ -34,9 +34,9 @@ load('data/poimcmcsynth500k.Rdata')
 
 ### Run and time PMCMC
 ### Particle mcmc
-#t1pmcmc <- Sys.time()
-#pmcmc_chain <- pmcmc_bsflu(sim, init, c(2,0.5,0.8), 1000, 500000,  rw_params = c(0.5,0.1,0.22))
-#t2pmcmc <- Sys.time()
+t1pmcmc <- Sys.time()
+pmcmc_chain <- pmcmc_bsflu(sim, init, c(2,0.5,0.8), 1000, 10,  rw_params = c(0.5,0.1,0.22))
+t2pmcmc <- Sys.time()
 ## alternatively load a pre run mcmc
 load('data/pmcmc500kbsflu.Rdata')
 
@@ -104,9 +104,24 @@ init_real <- c(762,1,0)
 y <- bsflu$B
 
 ## Run mcmc or load pre run chains
-mcmc_chain_real <- LNA_mcmc_3param(y, init_real, c(2,0.5,0.8), 1000, rw_params = c(0.4,0.05,0.07))
+
+#t1 = Sys.time()
+#mcmc_chain_real <- LNA_mcmc_3param(y, init_real, c(2,0.5,0.8), 10, rw_params = c(0.4,0.05,0.07))
+#t2 = Sys.time()
 #
-mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 500, rw_params = c(0.4,0.05,0.1,0.5))
+t1 = Sys.time()
+mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 100000, rw_params = c(0.4,0.05,0.1,10))
+t2 = Sys.time()
+t2-t1
+
+mcmc_chain_real$acceptance_ratio
+
+ts.plot(mcmc_chain_real$param_samples[1,])
+ts.plot(mcmc_chain_real$param_samples[2,])
+ts.plot(mcmc_chain_real$param_samples[3,])
+ts.plot(mcmc_chain_real$param_samples[4,])
+
+save(mcmc_chain_real, file = "LNA.RData")
 #
 #mcmc_chain_real <- poisson_mcmc(y, init_real, c(2,0.5,0.8), 500000, rw_params = c(0.4,0.05,0.1))
 #
