@@ -117,9 +117,13 @@ t2-t1
 mcmc_chain_real$acceptance_ratio
 
 ts.plot(mcmc_chain_real$param_samples[1,])
+hist(mcmc_chain_real$param_samples[1,])
 ts.plot(mcmc_chain_real$param_samples[2,])
+hist(mcmc_chain_real$param_samples[2,])
 ts.plot(mcmc_chain_real$param_samples[3,])
+hist(mcmc_chain_real$param_samples[3,])
 ts.plot(mcmc_chain_real$param_samples[4,])
+hist(mcmc_chain_real$param_samples[4,])
 
 save(mcmc_chain_real, file = "LNA.RData")
 #
