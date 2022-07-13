@@ -65,6 +65,52 @@ SIR_approx_lik_LNA <- function(y, init_pop, init_params){
   
 }
 
+
+SIR_simulator_LNA <- function(t, init_pop, init_params){
+  
+  times_grid = seq(0, 1, by = 0.1)
+  time_steps = t
+  x_prev     = array(c(init_pop[1:2], 0,0, 0,0,0,0), dim = c(8,1))
+  parameters = init_params[1:2]
+  parameters[1] = parameters[1]/763
+  q          = init_params[3]
+  #v          = init_params[4]
+  
+  
+  y_sim <- c()
+  x_sim <- matrix(data = NA, nrow = 2, t)
+  for (i in 1:time_steps){
+    
+    x_next = array(ode(x_prev, times_grid, LNA_restart, parameters)[11,2:9], dim = c(8, 1))
+    mu_t    = x_next[1:2]
+    Sigma_t = matrix(x_next[5:8], ncol = 2)
+    x_sim[,i] = c(-1,-1)
+    while(any(x_sim[,i]<c(0,0))) {
+      x_sim[,i] <- rmvnorm(1,mean = mu_t, sigma = Sigma_t)
+    }
+    
+    
+    # alternative:
+    v = mu_t[2]*q*(1-q)
+    
+    mu_l   = q*x_sim[2,i]
+    Sigma_l= x_sim[2,i]*q*(1-q)
+    
+    y_sim[i] <- rnorm(1,mean = mu_l, Sigma_l)
+    
+    mu_star    = x_sim[,i]
+    Sigma_star = Sigma_t
+    
+    x_prev = array(c(x_sim[,i], x_next[3:4], array(0, dim = c(4))), dim = c(8, 1))
+  }
+  
+  
+  return(y_sim)
+  
+}
+
+
+
 SIR_approx_filter_LNA <- function(y, init_pop, init_params){
   
   times_grid = seq(0, 1, by = 0.1)

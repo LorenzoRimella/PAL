@@ -133,6 +133,87 @@ save(mcmc_chain_real, file = "LNA.RData")
 #
 #dapmcmc_chain_real_vague <- dapmcmc_bsflu(y, init_real, c(2,0.5,0.8), 1000, 500000,  rw_params = 1.5*c(0.4,0.05,0.1))
 
+## Run mcmc or load pre run chains
+t1 <- Sys.time()
+mcmc_chain_real <- LNA_mcmc_3param(y, init_real, c(2,0.5,0.8), 100000, rw_params = c(0.4,0.05,0.075))
+t2 <- Sys.time()
+
+mcmc_chain_real$acceptance_ratio
+
+ts.plot(mcmc_chain_real$param_samples[1,])
+ts.plot(mcmc_chain_real$param_samples[2,])
+ts.plot(mcmc_chain_real$param_samples[3,])
+ts.plot(mcmc_chain_real$param_samples[4,])
+
+save(mcmc_chain_real, file = "LNA.RData")
+#
+#mcmc_chain_real <- poisson_mcmc(y, init_real, c(2,0.5,0.8), 500000, rw_params = c(0.4,0.05,0.1))
+#
+#pmcmc_chain_real_vague <- pmcmc_bsflu(y, init_real, c(2,0.5,0.8), 1000, 500000,  rw_params = 1.5*c(0.4,0.05,0.1))
+#
+#dapmcmc_chain_real_vague <- dapmcmc_bsflu(y, init_real, c(2,0.5,0.8), 1000, 500000,  rw_params = 1.5*c(0.4,0.05,0.1))
+
+par(mfrow = c(3,1))
+ts.plot(mcmc_chain_real$param_samples[1,])
+ts.plot(mcmc_chain_real$param_samples[2,])
+ts.plot(mcmc_chain_real$param_samples[3,])
+plot(mcmc_chain_real$param_samples[1,],mcmc_chain_real$param_samples[3,])
+acf(mcmc_chain_real$param_samples[3,])
+mcmc_chain_real$acceptance_ratio
+
+
+### LNA posterior predictive
+
+filt <- SIR_approx_filter_LNA(y, init, c(1.8,0.475,0.97))
+indices <- sample(1000:100000, replace = T, size = 20000)
+trajectories <- matrix(data= NA, nrow = 2e4,ncol = 14)
+j=0
+for(i in indices) {
+  j=j+1
+  print(j)
+  pars <- mcmc_chain_real$param_samples[,i]
+  filt <- SIR_approx_filter_LNA(y, init, pars)
+  trajectories[j,] <- rmvnorm(1,mean = pars[3]*filt$mean_time[,2], sigma = diag((pars[3]^2)*filt$Sigma_time[,2,2]^2  + filt$mean_time[,2]*pars[3]*(1-pars[3])))
+}
+par(mfrow = c(1,1))
+par(cex.main = 1, cex.lab = 1)
+ts.plot(colMeans(trajectories),ylim = c(0, max(trajectories)), ylab = 'Current infected', main = "Posterior predictive plots with LNA sample")
+polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.75),rev(colQuantiles(trajectories, probs = 0.25))),lty=0,col=rgb(0,0.3,1,0.4))
+polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.95),rev(colQuantiles(trajectories, probs = 0.05))),lty=0,col=rgb(0,0.3,1,0.2))
+points(y, pch = 19)
+legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credible interval", " 90% credible interval"), 
+       box.lwd = 1, bty = 'n',bg = "white",
+       col=c("black", "blue", rgb(0,0.3,1,0.65), rgb(0,0.3,1,0.2)), lty= c(NA, 1, 1, 1), lwd = c(NA, 2, 8, 10), pch=c(19, NA, NA, NA),
+       seg.len=0.25, y.intersp=0.65, x.intersp=0.25, cex=1.2)
+
+### LNA posterior predictive with binom stochastic model
+
+par(mfrow= c(1,1))
+## Sample from the model
+indices <- sample(10000:100000, replace = T, size = 10000)
+trajectories <- matrix(data= NA, nrow = 1e4,ncol = 14)
+j=0
+for(i in indices) {
+  j=j+1
+  i = indices[j]
+  print(j)
+  pars <- mcmc_chain_real$param_samples[,i]
+  ppsim <- SIR_simulator_LNA(14, init, pars)
+  trajectories[j,] <- ppsim
+}
+par(cex.main = 1, cex.lab = 1)
+ts.plot(colMeans(trajectories),ylim = c(0, max(trajectories)), ylab = 'Current infected', main = "Posterior predictive plots with PALMH sample")
+polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.75),rev(colQuantiles(trajectories, probs = 0.25))),lty=0,col=rgb(0,0.3,1,0.4))
+polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.95),rev(colQuantiles(trajectories, probs = 0.05))),lty=0,col=rgb(0,0.3,1,0.2))
+points(y, pch = 19)
+legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credible interval", " 90% credible interval"), 
+       box.lwd = 1, bty = 'n',bg = "white",
+       col=c("black", "blue", rgb(0,0.3,1,0.65), rgb(0,0.3,1,0.2)), lty= c(NA, 1, 1, 1), lwd = c(NA, 2, 8, 10), pch=c(19, NA, NA, NA),
+       seg.len=0.25, y.intersp=0.65, x.intersp=0.25, cex=1.2)
+
+
+
+
 
 
 load('data/poimcmcreal500k.Rdata')
