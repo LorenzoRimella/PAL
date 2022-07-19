@@ -5,12 +5,25 @@ library(mvtnorm)
 
 ## Priors
 logprior <- function(params){
-  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,0.5), nrow = 3)))
+  return(dmvnorm(params, mean = c(0,0), sigma = diag(c(1,1), nrow = )))
+}
+
+logprior_poisson <- function(params){
+  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,1), nrow = )))
 }
 
 ## Priors
-logprior_LNA <- function(params){
-  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4)))
+#logprior_LNA <- function(params){
+#  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4)))
+#}
+
+## Priors
+logprior_v <- function(params){
+  return(dgamma(params, 1.1, (1.1*(5*763/10^5)^2)))
+}
+
+logprior_q <- function(params){
+  return(dgamma(params, 1.1, (1.1/10)))
 }
 
 ## gibbs proposal
@@ -21,6 +34,16 @@ proposal <- function(par, var, indicator = 0){
   if(prop>=1 && indicator == 1){prop = par}
   return(prop)
 }
+
+#proposal <- function(par, var, indicator = 0){
+#  prop <- rnorm(1, par, var)
+#  if(prop>=1 && indicator == 1){prop = -1}
+#  while(prop <= 0){
+#    prop <- rnorm(1, par, var)
+#    if(prop>=1 && indicator == 1){prop = -1}
+#  }
+#  return(prop)
+#}
 
 
 ## poisson mcmc
@@ -39,7 +62,7 @@ poisson_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
       prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
       
       new_Loglik <- SIR_approx_lik(y, init_pop, prop)
-      prior_diff <- logprior(prop) - logprior(sample)
+      prior_diff <- logprior_poisson(prop) - logprior_poisson(sample)
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)
@@ -47,7 +70,7 @@ poisson_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
       if(u < exp(prior_diff + Log_lik_diff)){
         sample <- prop
         old_Loglik <- new_Loglik
-        accepted_params[j] = accepted_params[j] + 1
+        accepted_params[j] = accepted_params[j] + 1 - as.numeric(prop[j]==sample[j]) 
         print('accepted')
         print(sample)
       }
@@ -77,15 +100,15 @@ LNA_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
       prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
       
       new_Loglik <- SIR_approx_lik_LNA(y, init_pop, prop)
-      prior_diff <- logprior_LNA(prop) - logprior_LNA(sample)
+      prior_diff <- logprior(prop[1:2]) - logprior(sample[1:2]) + logprior_q(prop[3]) - logprior_q(sample[3]) + logprior_v(prop[4]) - logprior_v(sample[4])
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)
       
       if(u < exp(prior_diff + Log_lik_diff)){
-        sample <- prop
         old_Loglik <- new_Loglik
-        accepted_params[j] = accepted_params[j] + 1
+        accepted_params[j] = accepted_params[j] + 1- as.numeric(prop[j]==sample[j])
+        sample <- prop
         print('accepted')
         print(sample)
       }
@@ -153,7 +176,7 @@ pmcmc_bsflu <- function(y, init_pop, init_params, n_particles, n_iter, rw_params
       prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
       
       new_Loglik <- Particle_likelihood_SIR(init_pop, y, prop, n_particles)
-      prior_diff <- logprior(prop) - logprior(sample)
+      prior_diff <- logprior_poisson(prop) - logprior_poisson(sample)
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)
@@ -195,7 +218,7 @@ dapmcmc_bsflu <- function(y, init_pop, init_params, n_particles, n_iter, rw_para
       prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
       
       new_Loglik <- SIR_approx_lik(y, init_pop, prop)
-      prior_diff <- logprior(prop) - logprior(sample)
+      prior_diff <- logprior_poisson(prop) - logprior_poisson(sample)
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)

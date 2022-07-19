@@ -74,7 +74,7 @@ SIR_simulator_LNA <- function(t, init_pop, init_params){
   parameters = init_params[1:2]
   parameters[1] = parameters[1]/763
   q          = init_params[3]
-  #v          = init_params[4]
+  v          = init_params[4]
   
   
   y_sim <- c()
@@ -90,11 +90,10 @@ SIR_simulator_LNA <- function(t, init_pop, init_params){
     }
     
     
-    # alternative:
-    v = mu_t[2]*q*(1-q)
+    # alternative:v = mu_t[2]*q*(1-q)
     
     mu_l   = q*x_sim[2,i]
-    Sigma_l= x_sim[2,i]*q*(1-q)
+    Sigma_l= v #x_sim[2,i]*q*(1-q)
     
     y_sim[i] <- rnorm(1,mean = mu_l, Sigma_l)
     

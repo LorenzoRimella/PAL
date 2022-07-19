@@ -114,15 +114,30 @@ mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 100000, rw_params = c(
 t2 = Sys.time()
 t2-t1
 
-mcmc_chain_real$acceptance_ratio
+"mcmc_chain_real$acceptance_ratio"
 
-ts.plot(mcmc_chain_real$param_samples[1,])
+dev.off()
+par(mar =c(1,5,1,1), mfrow = c(4,1))
+ts.plot(mcmc_chain_real$param_samples[1,], ylab="beta")
+ts.plot(mcmc_chain_real$param_samples[2,], ylab="gamma")
+ts.plot(mcmc_chain_real$param_samples[3,], ylab="q")
+ts.plot(mcmc_chain_real$param_samples[4,], ylab="v")
+
+
+plot(mcmc_chain_real$param_samples[1,],mcmc_chain_real$param_samples[3,])
+
+dev.off()
+par(mar =c(1,1,1,1), mfrow = c(4,1))
+acf(mcmc_chain_real$param_samples[1,])
+acf(mcmc_chain_real$param_samples[2,])
+acf(mcmc_chain_real$param_samples[3,])
+acf(mcmc_chain_real$param_samples[4,])
+
+dev.off()
+par(mar =c(1,1,1,1), mfrow = c(4,1))
 hist(mcmc_chain_real$param_samples[1,])
-ts.plot(mcmc_chain_real$param_samples[2,])
 hist(mcmc_chain_real$param_samples[2,])
-ts.plot(mcmc_chain_real$param_samples[3,])
 hist(mcmc_chain_real$param_samples[3,])
-ts.plot(mcmc_chain_real$param_samples[4,])
 hist(mcmc_chain_real$param_samples[4,])
 
 save(mcmc_chain_real, file = "LNA.RData")
@@ -164,9 +179,8 @@ mcmc_chain_real$acceptance_ratio
 
 ### LNA posterior predictive
 
-filt <- SIR_approx_filter_LNA(y, init, c(1.8,0.475,0.97))
 indices <- sample(1000:100000, replace = T, size = 20000)
-trajectories <- matrix(data= NA, nrow = 2e4,ncol = 14)
+trajectories <- matrix(data= NA, nrow = 2e3,ncol = 14)
 j=0
 for(i in indices) {
   j=j+1
@@ -191,8 +205,9 @@ legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credibl
 par(mfrow= c(1,1))
 ## Sample from the model
 indices <- sample(10000:100000, replace = T, size = 10000)
-trajectories <- matrix(data= NA, nrow = 1e4,ncol = 14)
+trajectories <- matrix(data= NA, nrow = 1e3,ncol = 14)
 j=0
+init = c(762,1,0)
 for(i in indices) {
   j=j+1
   i = indices[j]
@@ -201,8 +216,12 @@ for(i in indices) {
   ppsim <- SIR_simulator_LNA(14, init, pars)
   trajectories[j,] <- ppsim
 }
+y <- bsflu$B
+#library(MatrixGenerics)
+library(matrixStats)
+dev.off()
 par(cex.main = 1, cex.lab = 1)
-ts.plot(colMeans(trajectories),ylim = c(0, max(trajectories)), ylab = 'Current infected', main = "Posterior predictive plots with PALMH sample")
+ts.plot(colMeans(trajectories),ylim = c(0, 500), ylab = 'Current infected', main = "Posterior predictive plots with PALMH sample")
 polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.75),rev(colQuantiles(trajectories, probs = 0.25))),lty=0,col=rgb(0,0.3,1,0.4))
 polygon(c(1:14,rev(1:14)),c(colQuantiles(trajectories, probs = 0.95),rev(colQuantiles(trajectories, probs = 0.05))),lty=0,col=rgb(0,0.3,1,0.2))
 points(y, pch = 19)
