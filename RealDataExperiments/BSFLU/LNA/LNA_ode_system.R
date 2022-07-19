@@ -95,7 +95,7 @@ SIR_simulator_LNA <- function(t, init_pop, init_params){
     mu_l   = q*x_sim[2,i]
     Sigma_l= v #x_sim[2,i]*q*(1-q)
     
-    y_sim[i] <- rnorm(1,mean = mu_l, Sigma_l)
+    y_sim[i] <- rnorm(1,mean = mu_l, sd = sqrt(Sigma_l))
     
     mu_star    = x_sim[,i]
     Sigma_star = Sigma_t

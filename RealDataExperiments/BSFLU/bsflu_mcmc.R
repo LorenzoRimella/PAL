@@ -93,7 +93,6 @@ LNA_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
   old_Loglik <- SIR_approx_lik_LNA(y, init_pop, init_params)
   accepted_params <- c(0,0,0,0)
   for (i in 1:n_iter) {
-    print(i)
     sample <- param_samples[,i]
     for (j in 1:4){
       prop <- sample
@@ -109,10 +108,14 @@ LNA_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
         old_Loglik <- new_Loglik
         accepted_params[j] = accepted_params[j] + 1- as.numeric(prop[j]==sample[j])
         sample <- prop
-        print('accepted')
-        print(sample)
+        if(i%%1000==0){
+          print(i)
+          print('accepted')
+          print(sample)          
+        }
+
       }
-      else{print('rejected')}
+      else{if(i%%1000==0){print('rejected')}}
     }
     param_samples[,i+1] = sample
   }
