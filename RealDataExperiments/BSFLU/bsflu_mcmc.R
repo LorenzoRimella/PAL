@@ -4,27 +4,27 @@ library(mvtnorm)
 
 
 ## Priors
-logprior <- function(params){
-  return(dmvnorm(params, mean = c(0,0), sigma = diag(c(1,1), nrow = )))
-}
+#logprior <- function(params){
+#  return(dmvnorm(params, mean = c(0,0), sigma = diag(c(1,1), nrow = 2, log = TRUE)))
+#}
 
-logprior_poisson <- function(params){
-  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,1), nrow = )))
-}
-
-## Priors
-#logprior_LNA <- function(params){
-#  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4)))
+#logprior_poisson <- function(params){
+#  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,1), nrow = 3, log = TRUE)))
 #}
 
 ## Priors
-logprior_v <- function(params){
-  return(dgamma(params, 1.1, (1.1*(5*763/10^5)^2)))
+logprior_LNA <- function(params){
+  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4, log = TRUE)))
 }
 
-logprior_q <- function(params){
-  return(dgamma(params, 1.1, (1.1/10)))
-}
+## Priors
+#logprior_v <- function(params){
+#  return(dgamma(params, 1.1, (1.1*(5*763/10^5)^2, log = TRUE)))
+#}
+
+#logprior_q <- function(params){
+#  return(dgamma(params, 1.1, (1.1/10), log = TRUE))
+#}
 
 ## gibbs proposal
 

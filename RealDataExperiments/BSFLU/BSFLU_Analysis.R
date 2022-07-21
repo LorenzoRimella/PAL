@@ -9,8 +9,8 @@ source("LNA/LNA_ode_system.R")
 
 ################ Simulation study
 #Set simulation parameters
-init <- c(763-1,1,0)
-pars <- c(2,0.5,0.8)
+init_pop <- c(763-1,1,0)
+init_params <- c(2,0.5,0.8)
 parnames <- c(expression(beta),expression(gamma),expression(q))
 colours <- c('darkred', 'darkgreen', 'orange')
 t <- 14
@@ -110,11 +110,11 @@ y <- bsflu$B
 #t2 = Sys.time()
 #
 t1 = Sys.time()
-mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 100000, rw_params = c(0.4,0.05,0.1,10))
+mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 100000, rw_params = c(0.4,0.05,0.1,500))
 t2 = Sys.time()
 t2-t1
 
-"mcmc_chain_real$acceptance_ratio"
+mcmc_chain_real$acceptance_ratio
 
 dev.off()
 par(mar =c(1,5,1,1), mfrow = c(4,1))
@@ -123,24 +123,24 @@ ts.plot(mcmc_chain_real$param_samples[2,], ylab="gamma")
 ts.plot(mcmc_chain_real$param_samples[3,], ylab="q")
 ts.plot(mcmc_chain_real$param_samples[4,], ylab="v")
 
+scatter.smooth(mcmc_chain_real$param_samples[3,],mcmc_chain_real$param_samples[4,], ty="p")
 
-plot(mcmc_chain_real$param_samples[1,],mcmc_chain_real$param_samples[3,])
 
-dev.off()
-par(mar =c(1,1,1,1), mfrow = c(4,1))
+par(mfrow = c(4,1))
 acf(mcmc_chain_real$param_samples[1,])
 acf(mcmc_chain_real$param_samples[2,])
 acf(mcmc_chain_real$param_samples[3,])
 acf(mcmc_chain_real$param_samples[4,])
 
-dev.off()
-par(mar =c(1,1,1,1), mfrow = c(4,1))
+
+par( mfrow = c(4,1))
 hist(mcmc_chain_real$param_samples[1,])
 hist(mcmc_chain_real$param_samples[2,])
 hist(mcmc_chain_real$param_samples[3,])
-hist(mcmc_chain_real$param_samples[4,])
+hist(mcmc_chain_real$param_samples[4,], freq = F)
+plot(seq(0,10,by=0.1), 2*dnorm(seq(0,10,by=0.1), 0, 1))
 
-save(mcmc_chain_real, file = "LNA.RData")
+#save(mcmc_chain_real, file = "LNA.RData")
 #
 #mcmc_chain_real <- poisson_mcmc(y, init_real, c(2,0.5,0.8), 500000, rw_params = c(0.4,0.05,0.1))
 #
@@ -204,7 +204,7 @@ legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credibl
 
 par(mfrow= c(1,1))
 ## Sample from the model
-indices <- sample(10000:100000, replace = T, size = 10000)
+indices <- sample(10000:100000, replace = T, size = 1000)
 trajectories <- matrix(data= NA, nrow = 1e3,ncol = 14)
 j=0
 init = c(762,1,0)
@@ -231,9 +231,12 @@ legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credibl
        seg.len=0.25, y.intersp=0.65, x.intersp=0.25, cex=1.2)
 
 
+hist(mcmc_chain_real$param_samples[4,], freq = F)
+lines(seq(0.01,4000,by=0.5), dgamma(seq(0.01,4000,by=0.5), 1.1, 1.1*(5*763/10^5)^2), ty = "l")
+plot(seq(0.01,100,by=0.5), 2*dnorm(seq(0.01,100,by=0.5), 0,1), ty = "l")
 
 
-
+plot(seq(0.01,400,by=0.5), dgamma(seq(0.01,400,by=0.5), 1.1, 1.1*(5*763/10^5)^2), ty = "l")
 
 load('data/poimcmcreal500k.Rdata')
 load('data/dapmcmcvague500k.Rdata')
@@ -277,7 +280,13 @@ par(mfrow = c(3,3), cex.main = 1.5, cex.lab = 1)
 
 
 
-
+  test <- data.frame(q = mcmc_chain_real$param_samples[3,], v = mcmc_chain_real$param_samples[4,])
+  > library(ggplot2)
+  > ggplot(test, aes(x = q, y = v)) + stat_bin_2d()
+  > ?stat_bin2d
+  > ggplot(test, aes(x = q, y = v)) + stat_bin_2d(bins = 60)
+  > library(pomp)
+  > bsflu$B
 
 
 

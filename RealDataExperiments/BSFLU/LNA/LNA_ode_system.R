@@ -27,6 +27,7 @@ LNA_restart <- function(t, state, parameters){
   return(list(c(deta_dt, dm_dt, array(t(dPsi_dt), dim = c(4)))))
 }
 
+
 SIR_approx_lik_LNA <- function(y, init_pop, init_params){
   
   times_grid = seq(0, 1, by = 0.1)
