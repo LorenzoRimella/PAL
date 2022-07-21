@@ -8,19 +8,19 @@ library(mvtnorm)
 #  return(dmvnorm(params, mean = c(0,0), sigma = diag(c(1,1), nrow = 2, log = TRUE)))
 #}
 
-#logprior_poisson <- function(params){
-#  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,1), nrow = 3, log = TRUE)))
-#}
-
-## Priors
-logprior_LNA <- function(params){
-  return(dmvnorm(params, mean = c(0,0,0.5,0), sigma = diag(c(1,1,0.5,1), nrow = 4, log = TRUE)))
+logprior_poisson <- function(params){
+  return(dmvnorm(params, mean = c(0,0,0.5), sigma = diag(c(1,1,1), nrow = 3), log = TRUE))
 }
 
 ## Priors
-#logprior_v <- function(params){
-#  return(dgamma(params, 1.1, (1.1*(5*763/10^5)^2, log = TRUE)))
-#}
+logprior_LNA <- function(params){
+  return(dmvnorm(params, mean = c(0,0,0.5,400), sigma = diag(c(1,1,0.5,100), nrow = 4), log = TRUE))
+}
+
+## Priors
+logprior_v <- function(params){
+  return(dgamma(params, 1.1, (1.1*(5*763/10^5)^2), log = TRUE))
+}
 
 #logprior_q <- function(params){
 #  return(dgamma(params, 1.1, (1.1/10), log = TRUE))
@@ -99,7 +99,7 @@ LNA_mcmc <- function(y, init_pop, init_params, n_iter, rw_params){
       prop[j] <- proposal(param_samples[j,i], rw_params[j], ind[j])
       
       new_Loglik <- SIR_approx_lik_LNA(y, init_pop, prop)
-      prior_diff <- logprior(prop[1:2]) - logprior(sample[1:2]) + logprior_q(prop[3]) - logprior_q(sample[3]) + logprior_v(prop[4]) - logprior_v(sample[4])
+      prior_diff <- logprior_poisson(prop[1:3]) - logprior_poisson(sample[1:3]) + logprior_v(prop[4]) - logprior_v(sample[4])#logprior(prop[1:2]) - logprior(sample[1:2]) + logprior_q(prop[3]) - logprior_q(sample[3]) + logprior_v(prop[4]) - logprior_v(sample[4])
       Log_lik_diff <- new_Loglik - old_Loglik
       
       u <- runif(1)

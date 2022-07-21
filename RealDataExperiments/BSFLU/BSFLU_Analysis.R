@@ -110,7 +110,7 @@ y <- bsflu$B
 #t2 = Sys.time()
 #
 t1 = Sys.time()
-mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,1), 100000, rw_params = c(0.4,0.05,0.1,500))
+mcmc_chain_real <- LNA_mcmc(y, init_real, c(2,0.5,0.8,10), 100000, rw_params = c(0.4,0.05,0.1,500))
 t2 = Sys.time()
 t2-t1
 
