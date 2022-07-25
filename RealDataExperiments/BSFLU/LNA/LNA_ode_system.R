@@ -44,8 +44,49 @@ SIR_approx_lik_LNA <- function(y, init_pop, init_params){
   for (i in 1:time_steps){
     
     x_next = array(ode(x_prev, times_grid, LNA_restart, parameters)[11,2:9], dim = c(8, 1))
+    
     mu_t    = x_next[1:2]
     Sigma_t = matrix(x_next[5:8], ncol = 2)
+    
+    # alternative:v = mu_t[2]*q*(1-q)
+    
+    mu_l   = q*mu_t[2]
+    Sigma_l= q*q*Sigma_t[2,2] + v
+    
+    loglikelihood = loglikelihood + dnorm(y[i], mean = mu_l, sd = sqrt(Sigma_l), log = T)
+    
+    covSigma = array(c(q*Sigma_t[1,2], q*Sigma_t[2,2]), dim = c(2,1))
+    
+    mu_star    = mu_t    + ((y[i] - mu_l)/(Sigma_l))*covSigma
+    Sigma_star = Sigma_t - (1/(Sigma_l))*(covSigma %*% t(covSigma))
+    
+    x_prev = array(c(mu_star, 0,0, array(Sigma_star, dim = c(4))), dim = c(8, 1))
+  }
+  
+  return(loglikelihood)
+  
+}
+
+SIR_approx_lik_LNA_time <- function(y, init_pop, init_params, ode_steps){
+  
+  times_grid = seq(0, 1, length=ode_steps)
+  time_steps = length(y)
+  
+  x_prev     = array(c(init_pop[1:2], 0,0, 0,0,0,0), dim = c(8,1))
+  parameters = init_params[1:2]
+  parameters[1] = parameters[1]/763
+  q          = init_params[3]
+  v          = init_params[4]
+  
+  loglikelihood = 0 
+  
+  for (i in 1:time_steps){
+    
+    #start = Sys.time()
+    x_next = array(ode(x_prev, times_grid, LNA_restart, parameters)[ode_steps,2:9], dim = c(8, 1))
+    mu_t    = x_next[1:2]
+    Sigma_t = matrix(x_next[5:8], ncol = 2)
+    #print(as.double(Sys.time()-start))
     
     # alternative:v = mu_t[2]*q*(1-q)
     

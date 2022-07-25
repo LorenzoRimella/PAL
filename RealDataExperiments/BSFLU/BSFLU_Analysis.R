@@ -6,14 +6,52 @@ sourceCpp('cpp/Approx_SIR_filter.cpp')
 sourceCpp('cpp/SIR_particle_filter.cpp')
 source('bsflu_mcmc.R')
 source("LNA/LNA_ode_system.R")
+source("PAL.R")
 
 ################ Simulation study
 #Set simulation parameters
 init_pop <- c(763-1,1,0)
-init_params <- c(2,0.5,0.8)
-parnames <- c(expression(beta),expression(gamma),expression(q))
-colours <- c('darkred', 'darkgreen', 'orange')
-t <- 14
+init_params <- c(2,0.5,0.8, 400)
+
+y <- bsflu$B
+
+ode_step = seq(2, 50, by = 1)
+iterations = 10
+
+compare = matrix(NA, nrow = iterations , ncol = length(ode_step))
+
+for(reps in 1:iterations){
+  
+  time = rep(0, length(ode_step))
+  for(i in 1:length(ode_step)){
+    
+    start = Sys.time()
+    a = SIR_approx_lik_LNA_time(y, init_pop, init_params, ode_step[i])
+    time[i] = as.double(Sys.time()-start)
+    
+  }
+  
+  compare[reps,] = time
+  
+}
+
+compare_PAL = matrix(NA, nrow = iterations , ncol = 1)
+
+for(reps in 1:iterations){
+  
+  start = Sys.time()
+  a = SIR_approxlik_R(y, init_pop, init_params)
+  compare_PAL[reps] = as.double(Sys.time()-start)
+
+  
+}
+
+plot(ode_step, compare[1,], type = "l", ylim = c(0.0, 0.11))
+
+for(reps in 2:10){
+  lines(ode_step, compare[reps,], type = "l")
+  abline(h=compare_PAL[reps])
+}
 
 ## Run simulation or load data used in the paper, delete # as desired
 # sim <- SIR_simulator(t, init, pars)
@@ -134,10 +172,11 @@ acf(mcmc_chain_real$param_samples[4,])
 
 
 par( mfrow = c(4,1))
-hist(mcmc_chain_real$param_samples[1,])
-hist(mcmc_chain_real$param_samples[2,])
-hist(mcmc_chain_real$param_samples[3,])
-hist(mcmc_chain_real$param_samples[4,], freq = F)
+hist(mcmc_chain_real$param_samples[1,], freq = F, breaks =100)
+hist(mcmc_chain_real$param_samples[2,], freq = F, breaks =100)
+hist(mcmc_chain_real$param_samples[3,], freq = F, breaks =100)
+hist(mcmc_chain_real$param_samples[4,], freq = F, breaks =100)
+
 plot(seq(0,10,by=0.1), 2*dnorm(seq(0,10,by=0.1), 0, 1))
 
 #save(mcmc_chain_real, file = "LNA.RData")
@@ -231,7 +270,9 @@ legend("topright", legend=c(" Data", " Posterior predictive mean", " 50% credibl
        seg.len=0.25, y.intersp=0.65, x.intersp=0.25, cex=1.2)
 
 
-hist(mcmc_chain_real$param_samples[4,], freq = F)
+hist(mcmc_chain_real$param_samples[4,], freq = F, breaks = 100)
+lines(seq(0.01,4000,by=0.5), dnorm(seq(0.01,4000,by=0.5), 400, 300), ty = "l")
+
 lines(seq(0.01,4000,by=0.5), dgamma(seq(0.01,4000,by=0.5), 1.1, 1.1*(5*763/10^5)^2), ty = "l")
 plot(seq(0.01,100,by=0.5), 2*dnorm(seq(0.01,100,by=0.5), 0,1), ty = "l")
 
@@ -281,12 +322,12 @@ par(mfrow = c(3,3), cex.main = 1.5, cex.lab = 1)
 
 
   test <- data.frame(q = mcmc_chain_real$param_samples[3,], v = mcmc_chain_real$param_samples[4,])
-  > library(ggplot2)
-  > ggplot(test, aes(x = q, y = v)) + stat_bin_2d()
-  > ?stat_bin2d
-  > ggplot(test, aes(x = q, y = v)) + stat_bin_2d(bins = 60)
-  > library(pomp)
-  > bsflu$B
+  library(ggplot2)
+  ggplot(test, aes(x = q, y = v)) + stat_bin_2d()
+  stat_bin2d
+  plt = ggplot(test, aes(x = q, y = v)) + stat_density_2d_filled() +  ylim(0.0,1000)
+  library(pomp)
+  bsflu$B
 
 
 
