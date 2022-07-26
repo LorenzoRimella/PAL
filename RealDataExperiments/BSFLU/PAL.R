@@ -20,3 +20,29 @@ SIR_approxlik_R <- function(y,pop,pars){
   
   return(sum(lik))
 }
+
+SIR_approxlik_R_int <- function(y,pop,pars, int_steps){
+  lambda  <-  pop
+  n = sum(pop)
+  K = matrix(data = 0, nrow = 3, ncol = 3)
+  K[2,3] = 1 - exp(-(1/int_steps)*pars[2])
+  K[2,2] = exp(-(1/int_steps)*pars[2])
+  K[3,3] = 1
+  lik = c()
+  for(i in 1:length(y)){
+    
+    for(k in 1:int_steps){
+      K[1,2] = 1- exp(-(1/int_steps)*pars[1]*(lambda[2]/n))
+      K[1,1] = exp(-(1/int_steps)*pars[1]*(lambda[2]/n))
+      
+      lambda_ <- (lambda)%*%K
+      lambda <- lambda_
+    }
+    
+    lambda[2] <- y[i] + (1-pars[3])*lambda_[2]
+    
+    lik[i] = dpois(y[i],lambda_[2]*pars[3], log = T)
+  }
+  
+  return(sum(lik))
+}

@@ -18,40 +18,54 @@ y <- bsflu$B
 ode_step = seq(2, 50, by = 1)
 iterations = 10
 
-compare = matrix(NA, nrow = iterations , ncol = length(ode_step))
+#compare = matrix(NA, nrow = iterations , ncol = length(ode_step))
+compare <- data.frame(ode_step = rep(ode_step, iterations * 2), sec = rep(NA, length(ode_step) * iterations * 2), alg = rep("null", length(ode_step) * iterations * 2))
 
 for(reps in 1:iterations){
   
   time = rep(0, length(ode_step))
   for(i in 1:length(ode_step)){
     
-    start = Sys.time()
-    a = SIR_approx_lik_LNA_time(y, init_pop, init_params, ode_step[i])
-    time[i] = as.double(Sys.time()-start)
-    
+    compare[(reps - 1) * (length(ode_step)) + i, 1] <- ode_step[i]
+    compare[(reps - 1) * (length(ode_step)) + i, 2] <- system.time(SIR_approx_lik_LNA_time(y, init_pop, init_params, ode_step[i]))[1]
+    compare[(reps - 1) * (length(ode_step)) + i, 3] <-  "LNA"
   }
   
-  compare[reps,] = time
+  # compare[reps,] = time
   
 }
 
-compare_PAL = matrix(NA, nrow = iterations , ncol = 1)
-
-for(reps in 1:iterations){
+# compare_PAL = matrix(NA, nrow = iterations , ncol = 1)
+for(i in 1:length(ode_step)){
+  for(reps in 1:iterations){
   
-  start = Sys.time()
-  a = SIR_approxlik_R(y, init_pop, init_params)
-  compare_PAL[reps] = as.double(Sys.time()-start)
-
+  # start = Sys.time()
+  # a = SIR_approxlik_R(y, init_pop, init_params)
+  # compare_PAL[reps] = as.double(Sys.time()-start)
+  compare <- rbind(compare,
+                   data.frame(ode_step[i],
+                     system.time( SIR_approxlik_R(y, init_pop, init_params))[1],
+                     "LNA"
+                   )) 
   
+  }
 }
+# 
+# plot(ode_step, log(compare[1,]), type = "l", ylim=c(-10,-2))
+# 
+# for(reps in 2:10){
+#   lines(ode_step, log(compare[reps,]), type = "l")
+#   abline(h=log(compare_PAL[reps]))
+# }
 
-plot(ode_step, compare[1,], type = "l", ylim = c(0.0, 0.11))
+# library(microbenchmark)
+library(tidyverse)
+#install.packages("tidyverse")
 
-for(reps in 2:10){
-  lines(ode_step, compare[reps,], type = "l")
-  abline(h=compare_PAL[reps])
-}
+colnames(compare) <- c("ode_step", "seconds", "algorithm")
+
+ggplot(compare, aes(x = ode_step, y = seconds, color = algorithm)) + 
+  geom_smooth()
 
 ## Run simulation or load data used in the paper, delete # as desired
 # sim <- SIR_simulator(t, init, pars)
