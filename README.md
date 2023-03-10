@@ -25,9 +25,11 @@ SyntheticDataExperiments collects all the experiments on synthetic data supporti
 - LLN;
 - filtering recursion limits;
 - convergence of the maximum PAL estimator;
-- convergence of the maximum PAL estimator with identifiability issues.
+- convergence of the maximum PAL estimator with identifiability issues;
+- PALSMC filtering
+- convergence of the maximum PALSMC estimator.
 
 RealDataExperiments collects the real data experiments:
 - delayed acceptance PMCMC for the British boarding school influenza outbreak in 1978;
 - inference on an age-structured through HMC in Stan for the influenza outbreak in Wales in 1957;
-- inference in a gravity model for measles data.
+- inference in a gravity model for measles data (with overdispersion and city specific parameters).
