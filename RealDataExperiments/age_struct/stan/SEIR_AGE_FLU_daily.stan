@@ -1,5 +1,5 @@
 functions {
-  matrix Approx_filtering(int[,] ydat, real[] params, real q) {
+  matrix Approx_filtering(int[,] ydat, real[] params, real q[]) {
    
    vector[4] normaliser;
    vector[4] infecteds;
@@ -45,7 +45,7 @@ functions {
           filtered_intensity_update[7*(t),k] = filtered_intensity_pred[7*(t),k];
           // update the observed E -> I
           
-          filtered_intensity_update[7*t,k,2,3] = (filtered_intensity_pred[7*(t),k,2,3]/normaliser[k])*ydat[t,k] + (1-q)*filtered_intensity_pred[7*(t),k,2,3];
+          filtered_intensity_update[7*t,k,2,3] = (filtered_intensity_pred[7*(t),k,2,3]/normaliser[k])*ydat[t,k] + (1-q[k])*filtered_intensity_pred[7*(t),k,2,3];
           if(t<19){state[7*(t)+1,k] = [1,1,1,1]*filtered_intensity_update[7*(t),k];}
           }
         }
@@ -63,7 +63,7 @@ data {
 // The parameters accepted by the model
 parameters {
   real<lower = 0> params[10]; // Model parameters
-  real<lower = 0, upper = 1> q;
+  real<lower = 0, upper = 1> q[4];
 }
 
 
@@ -75,11 +75,11 @@ transformed parameters{
 
 // The model to be estimated.
 model {
-    params ~ normal(0, 10);
+    params ~ gamma(5, 1);
     q    ~ normal(0.5, 0.5);
     for(t in 1:19){
       for(k in 1:4){
-    y[t,k] ~ poisson(filtered_rate[k,t]*q);
+    y[t,k] ~ poisson(filtered_rate[k,t]*q[k]);
     
 }
 }
@@ -90,7 +90,7 @@ generated quantities {
   real log_lik = 0;
   for(t in 1:19){
       for(k in 1:4){
-  log_lik += poisson_lpmf(y[t,k] | filtered_rate[k,t]*q);
+  log_lik += poisson_lpmf(y[t,k] | filtered_rate[k,t]*q[k]);
     }
   }
 }
