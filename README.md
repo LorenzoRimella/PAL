@@ -32,4 +32,5 @@ SyntheticDataExperiments collects all the experiments on synthetic data supporti
 RealDataExperiments collects the real data experiments:
 - delayed acceptance PMCMC for the British boarding school influenza outbreak in 1978;
 - inference on an age-structured through HMC in Stan for the influenza outbreak in Wales in 1957;
+- over-dispersed model comparisons and selection - applied to the transmission of Rotavirus in Germany 2001-2008
 - inference in a gravity model for measles data (with overdispersion and city specific parameters).
