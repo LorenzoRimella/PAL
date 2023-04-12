@@ -95,9 +95,9 @@ def sim_run(self, n, T, number_simulations):
         x_tm1 = input[0]
 
         # transitions
-        # gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(self.number_simulations)
+        gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
         # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-        gamma_noise   = tf.ones(number_simulations)
+        # gamma_noise   = tf.ones(number_simulations)
         
         barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(self.delta)).sample()
         K_eta_tm1     = self.K_eta(barx_tm1, gamma_noise)
@@ -123,9 +123,9 @@ def sim_run_Q(self, n, T, Q, number_simulations=1):
         x_tm1 = input[0]
 
         # transitions
-        # gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(self.number_simulations)
+        gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
         # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-        gamma_noise   = tf.ones(number_simulations)
+        # gamma_noise   = tf.ones(number_simulations)
         
         barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(self.delta)).sample()
         K_eta_tm1     = self.K_eta(barx_tm1, gamma_noise)
@@ -243,9 +243,9 @@ def parameters_q_Laplace(q_param, lambda_t, y_t):
 
 def step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda_tm1, y_t):
 
-    # gamma_noise   = tfp.distributions.Gamma(1/self.beta_param[1], self.beta_param[1]).sample((barlambda_tm1.shape[:-1]))
+    gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barlambda_tm1.shape[:-1]))
     # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-    gamma_noise = tf.ones_like(barlambda_tm1[...,0])
+    # gamma_noise = tf.ones_like(barlambda_tm1[...,0])
 
     K_eta = K_eta_SEIR(beta_param, rho, gamma)
     barlambda_tm1_death = barlambda_tm1*tf.squeeze(delta)
@@ -306,7 +306,7 @@ def systematic_resampling(barlambda_t, gamma_noise, q_sampled, w_t, U):
     gamma_noise_resampled = tf.gather(gamma_noise, resample[:,0], axis = 0)
     q_sampled_resampled   = tf.gather(q_sampled,   resample[:,0], axis = 0)
 
-    return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled
+    return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled, resample[:,0]
 
     # @tf.function(jit_compile=True)
     # def systematic_resampling(self, barlambda_t, gamma_noise, q_sampled, w_t, U):
@@ -362,7 +362,7 @@ def run_SMC(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_
     def body(input, t):
 
         y_t = Y[t+1:t+2,...]
-        barlambda_tm1, _, _, w_t = input
+        barlambda_tm1, _, _, w_t, _ = input
         
         barlambda_t, gamma_noise, q_sampled, logw_t = step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda_tm1, y_t)
 
@@ -370,18 +370,18 @@ def run_SMC(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_
 
         U = tfp.distributions.Uniform(0, 1).sample(w_t.shape[:-2]+(1)+w_t.shape[-1:])
 
-        barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled = systematic_resampling(barlambda_t, gamma_noise, q_sampled, w_t, U)
+        barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled, ancestors = systematic_resampling(barlambda_t, gamma_noise, q_sampled, w_t, U)
 
-        return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled , w_t
+        return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled , w_t, ancestors
 
     lambda_0 = n*pi_0
     barlambda_tm1 = tf.squeeze(lambda_0)*tf.ones((n_particles, Y.shape[1], 1))
 
-    initializer_0 = ( barlambda_tm1, -tf.ones(barlambda_tm1.shape[:-1]), -tf.ones(barlambda_tm1.shape), -tf.ones(barlambda_tm1.shape[:-1]))
+    initializer_0 = ( barlambda_tm1, -tf.ones(barlambda_tm1.shape[:-1]), -tf.ones(barlambda_tm1.shape), -tf.ones(barlambda_tm1.shape[:-1]), -tf.ones(n_particles, dtype = tf.int32))
 
-    barLambda, _, Q, W = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
+    barLambda, GAMMA, Q, W, ancestors = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
 
-    return barLambda, Q, W
+    return barLambda, GAMMA, Q, W, ancestors
 
 @tf.function(jit_compile=True)
 def indeces_computation_(U_i, cumulative_w_t):
