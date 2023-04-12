@@ -82,7 +82,7 @@ data {
 }
 parameters {
   real<lower = 0> params[n_params]; // Model parameters
-  real<lower = 0, upper = 1> rho;
+  real<lower = 0, upper = 1> rho[4];
 }
 transformed parameters{
   vector[n_difeq] y_hat[n_obs]; // Output from the ODE solver
@@ -91,10 +91,10 @@ transformed parameters{
   real incidence3[n_obs];
   real incidence4[n_obs];
   y_hat = ode_rk45(SEIR_matrix_sym, y0, t0, ts, params);
-  incidence1[1] =  rho * (y_hat[1, 17]  - y0[17]);
-  incidence2[1] =  rho * (y_hat[1, 18]  - y0[18]);
-  incidence3[1] =  rho * (y_hat[1, 19]  - y0[19]);
-  incidence4[1] =  rho * (y_hat[1, 20]  - y0[20]);
+  incidence1[1] =  rho[1] * (y_hat[1, 17]  - y0[17]);
+  incidence2[1] =  rho[2] * (y_hat[1, 18]  - y0[18]);
+  incidence3[1] =  rho[3] * (y_hat[1, 19]  - y0[19]);
+  incidence4[1] =  rho[4] * (y_hat[1, 20]  - y0[20]);
   for (i in 1:n_obs-1) {
     incidence1[i + 1] = rho * (y_hat[i + 1, 17] - y_hat[i, 17] + 1e-5);
     incidence2[i + 1] = rho * (y_hat[i + 1, 18] - y_hat[i, 18] + 1e-5);
@@ -103,7 +103,7 @@ transformed parameters{
    }
 }
 model {
-    params ~ normal(0, 10);
+    params ~ gamma(5, 1);
     rho    ~ normal(0.5, 0.5);
     y1     ~ poisson(incidence1);
     y2     ~ poisson(incidence2);
