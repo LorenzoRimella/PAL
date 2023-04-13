@@ -10,9 +10,9 @@ def K_eta_SEIR( beta_param, rho, gamma):
         transmission_probability = 1 - tf.math.exp(-beta_param[0]*tf.einsum("...j, ...j -> ...j", x_t[...,2], gamma_noise)/(tf.reduce_sum(x_t, axis = -1)))
         transmission_probability = tf.reshape(transmission_probability, shape_x + (1, 1))
 
-        latent_probability       = (1 - np.exp(-rho))*tf.ones(transmission_probability.shape)
+        latent_probability       = (1 - tf.math.exp(-rho))*tf.ones(transmission_probability.shape)
 
-        recovery_probability     = (1 - np.exp(-gamma))*tf.ones(transmission_probability.shape)
+        recovery_probability     = (1 - tf.math.exp(-gamma))*tf.ones(transmission_probability.shape)
 
         K_eta_h__n_r1 = tf.concat((                            1 - transmission_probability, transmission_probability, tf.zeros(shape_x + (1, 2))), axis = -1)
         K_eta_h__n_r2 = tf.concat((tf.zeros(shape_x + (1, 1)), 1 - latent_probability,       latent_probability,       tf.zeros(shape_x + (1, 1))), axis = -1)
@@ -123,9 +123,9 @@ def sim_run_Q(self, n, T, Q, number_simulations=1):
         x_tm1 = input[0]
 
         # transitions
-        gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
+        # gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
         # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-        # gamma_noise   = tf.ones(number_simulations)
+        gamma_noise   = tf.ones(number_simulations)
         
         barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(self.delta)).sample()
         K_eta_tm1     = self.K_eta(barx_tm1, gamma_noise)
@@ -243,9 +243,9 @@ def parameters_q_Laplace(q_param, lambda_t, y_t):
 
 def step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda_tm1, y_t):
 
-    gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barlambda_tm1.shape[:-1]))
+    # gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barlambda_tm1.shape[:-1]))
     # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-    # gamma_noise = tf.ones_like(barlambda_tm1[...,0])
+    gamma_noise = tf.ones_like(barlambda_tm1[...,0])
 
     K_eta = K_eta_SEIR(beta_param, rho, gamma)
     barlambda_tm1_death = barlambda_tm1*tf.squeeze(delta)
