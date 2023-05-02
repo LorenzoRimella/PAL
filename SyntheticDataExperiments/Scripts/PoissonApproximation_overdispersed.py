@@ -383,6 +383,63 @@ def run_SMC(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_
 
     return barLambda, GAMMA, Q, W, ancestors
 
+def step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, x_tm1, y_t):
+    
+    barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(delta)).sample()
+    gamma_noise = tf.ones_like(barx_tm1[...,0])
+
+    K_eta = K_eta_SEIR(beta_param, rho, gamma)
+    K_eta_tm1 = K_eta(barx_tm1, gamma_noise)
+
+    x_t = sim_step_t(simulator, n, barx_tm1[:,0,:], K_eta_tm1[:,0,...], 1)
+    x_t = tf.expand_dims(x_t, axis = 1)
+
+    mu_r, sigma_r = parameters_q_Laplace(q_param, x_t, y_t)
+
+    mu_r = y_t/x_t
+    mu_r = tf.where(mu_r==0, -500*tf.ones(mu_r.shape), mu_r)
+
+    q_sampled_rv = tfp.distributions.TruncatedNormal(mu_r, sigma_r, 0, 1)
+
+    q_sampled  = q_sampled_rv.sample()
+
+    q_prior_rv = tfp.distributions.TruncatedNormal(tf.ones(q_sampled.shape)*tf.transpose(q_param[:,0:1]), tf.ones(q_sampled.shape)*tf.transpose(q_param[:,1:]), 0, 1)
+
+    logw_t = tf.reduce_sum(tfp.distributions.Binomial(total_count = x_t, probs = q_sampled).log_prob(y_t), axis = -1)
+
+    log_prior = q_prior_rv.log_prob(q_sampled)
+    log_propo = q_sampled_rv.log_prob(q_sampled)
+
+    logw_t_prior_proposal = logw_t + tf.reduce_sum(log_prior, axis =-1) - tf.reduce_sum(log_propo, axis =-1)
+
+    return x_t, gamma_noise, q_sampled, logw_t_prior_proposal
+
+def run_BPF(simulator, n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_particles, Y):
+
+    def body(input, t):
+
+        y_t = Y[t+1:t+2,...]
+        x_tm1, _, _, w_t, _ = input
+        
+        x_t, gamma_noise, q_sampled, logw_t = step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, x_tm1, y_t)
+
+        w_t = normalize_w(logw_t)
+
+        U = tfp.distributions.Uniform(0, 1).sample(w_t.shape[:-2]+(1)+w_t.shape[-1:])
+
+        x_t_resampled, gamma_noise_resampled, q_sampled_resampled, ancestors = systematic_resampling(x_t, gamma_noise, q_sampled, w_t, U)
+
+        return x_t_resampled, gamma_noise_resampled, q_sampled_resampled , w_t, ancestors
+
+    x_0 = sim_step_0(simulator, n, n_particles)
+    x_0 = tf.expand_dims(x_0, axis = 1)
+
+    initializer_0 = ( x_0, -tf.ones(x_0.shape[:-1]), -tf.ones(x_0.shape), -tf.ones(x_0.shape[:-1]), -tf.ones(n_particles, dtype = tf.int32))
+
+    X, GAMMA, Q, W, ancestors = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
+
+    return X, GAMMA, Q, W, ancestors
+
 @tf.function(jit_compile=True)
 def indeces_computation_(U_i, cumulative_w_t):
     
@@ -406,9 +463,9 @@ def multi_experiments_systematic_resampling(barlambda_t, gamma_noise, q_sampled,
 def run_SMC_loglikelihood(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_particles, Y):
 
     def body(input, t):
-
+    
         y_t = Y[t+1:t+2,...]
-        barlambda_tm1, _, _, w_t = input
+        barlambda_tm1, _, _, _, _ = input
         
         barlambda_t, gamma_noise, q_sampled, logw_t = step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda_tm1, y_t)
 
@@ -416,16 +473,42 @@ def run_SMC_loglikelihood(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param
 
         U = tfp.distributions.Uniform(0, 1).sample(w_t.shape[:-2]+(1)+w_t.shape[-1:])
 
-        barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled = multi_experiments_systematic_resampling(barlambda_t, gamma_noise, q_sampled, w_t, U)
+        barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled, ancestors = systematic_resampling(barlambda_t, gamma_noise, q_sampled, w_t, U)
 
-        return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled , logw_t
+        return barlambda_t_resampled, gamma_noise_resampled, q_sampled_resampled , logw_t, ancestors
 
     lambda_0 = n*pi_0
     barlambda_tm1 = tf.squeeze(lambda_0)*tf.ones((n_particles, Y.shape[1], 1))
 
-    initializer_0 = ( barlambda_tm1, -tf.ones(barlambda_tm1.shape[:-1]), -tf.ones(barlambda_tm1.shape), -tf.ones(barlambda_tm1.shape[:-1]))
+    initializer_0 = ( barlambda_tm1, -tf.ones(barlambda_tm1.shape[:-1]), -tf.ones(barlambda_tm1.shape), -tf.zeros(barlambda_tm1.shape[:-1]), -tf.ones(n_particles, dtype = tf.int32))
 
-    barLambda, _, Q, logW = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
+    _, _, _, logW, _ = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
+
+    return logW
+
+def run_BPF_loglikelihood(simulator, n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_particles, Y):
+    
+    def body(input, t):
+
+        y_t = Y[t+1:t+2,...]
+        x_tm1, _, _, _, _ = input
+        
+        x_t, gamma_noise, q_sampled, logw_t = step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, x_tm1, y_t)
+
+        w_t = normalize_w(logw_t)
+
+        U = tfp.distributions.Uniform(0, 1).sample(w_t.shape[:-2]+(1)+w_t.shape[-1:])
+
+        x_t_resampled, gamma_noise_resampled, q_sampled_resampled, ancestors = systematic_resampling(x_t, gamma_noise, q_sampled, w_t, U)
+
+        return x_t_resampled, gamma_noise_resampled, q_sampled_resampled , logw_t, ancestors
+
+    x_0 = sim_step_0(simulator, n, n_particles)
+    x_0 = tf.expand_dims(x_0, axis = 1)
+
+    initializer_0 = ( x_0, -tf.ones(x_0.shape[:-1]), -tf.ones(x_0.shape), tf.zeros(x_0.shape[:-1]), -tf.ones(n_particles, dtype = tf.int32))
+
+    _, _, _, logW, _ = tf.scan(body, tf.range(0, Y.shape[0]-1), initializer = initializer_0)
 
     return logW
 
