@@ -96,7 +96,7 @@ def sim_run(self, n, T, number_simulations):
 
         # transitions
         gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
-        # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
+        gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
         # gamma_noise   = tf.ones(number_simulations)
         
         barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(self.delta)).sample()
@@ -123,9 +123,9 @@ def sim_run_Q(self, n, T, Q, number_simulations=1):
         x_tm1 = input[0]
 
         # transitions
-        # gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
-        # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-        gamma_noise   = tf.ones(number_simulations)
+        gamma_noise   = tfp.distributions.Gamma(1/(self.beta_param[1]), self.beta_param[1]).sample(number_simulations)
+        gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
+        # gamma_noise   = tf.ones(number_simulations)
         
         barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(self.delta)).sample()
         K_eta_tm1     = self.K_eta(barx_tm1, gamma_noise)
@@ -243,9 +243,9 @@ def parameters_q_Laplace(q_param, lambda_t, y_t):
 
 def step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda_tm1, y_t):
 
-    # gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barlambda_tm1.shape[:-1]))
-    # gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
-    gamma_noise = tf.ones_like(barlambda_tm1[...,0])
+    gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barlambda_tm1.shape[:-1]))
+    gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
+    # gamma_noise = tf.ones_like(barlambda_tm1[...,0])
 
     K_eta = K_eta_SEIR(beta_param, rho, gamma)
     barlambda_tm1_death = barlambda_tm1*tf.squeeze(delta)
@@ -266,7 +266,9 @@ def step_t(n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, barlambda
     barlambda_t, logw_t = update(G, kappa, lambda_t, y_t, q_sampled)
 
     log_prior = q_prior_rv.log_prob(q_sampled)
+    log_prior = tf.where(tf.math.is_finite(log_prior), log_prior, tf.zeros(tf.shape(log_prior)))
     log_propo = q_sampled_rv.log_prob(q_sampled)
+    log_propo = tf.where(tf.math.is_finite(log_propo), log_propo, tf.zeros(tf.shape(log_propo)))
 
     logw_t_prior_proposal = logw_t + tf.reduce_sum(log_prior, axis =-1) - tf.reduce_sum(log_propo, axis =-1)
 
@@ -386,7 +388,9 @@ def run_SMC(n, pi_0, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, n_
 def step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, kappa, x_tm1, y_t):
     
     barx_tm1  = tfp.distributions.Binomial(total_count = x_tm1, probs = tf.transpose(delta)).sample()
-    gamma_noise = tf.ones_like(barx_tm1[...,0])
+
+    gamma_noise   = tfp.distributions.Gamma(1/beta_param[1], beta_param[1]).sample((barx_tm1.shape[:-1]))
+    gamma_noise   = tf.where(tf.math.is_nan(gamma_noise), tf.ones_like(gamma_noise), gamma_noise)
 
     K_eta = K_eta_SEIR(beta_param, rho, gamma)
     K_eta_tm1 = K_eta(barx_tm1, gamma_noise)
@@ -398,6 +402,7 @@ def step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, k
 
     mu_r = y_t/x_t
     mu_r = tf.where(mu_r==0, -500*tf.ones(mu_r.shape), mu_r)
+    mu_r = tf.where(tf.math.is_nan(mu_r), -500*tf.ones(mu_r.shape), mu_r)
 
     q_sampled_rv = tfp.distributions.TruncatedNormal(mu_r, sigma_r, 0, 1)
 
@@ -408,7 +413,9 @@ def step_t_BPF(simulator, n, delta, beta_param, rho, gamma, alpha, q_param, G, k
     logw_t = tf.reduce_sum(tfp.distributions.Binomial(total_count = x_t, probs = q_sampled).log_prob(y_t), axis = -1)
 
     log_prior = q_prior_rv.log_prob(q_sampled)
+    log_prior = tf.where(tf.math.is_finite(log_prior), log_prior, tf.zeros(tf.shape(log_prior)))
     log_propo = q_sampled_rv.log_prob(q_sampled)
+    log_propo = tf.where(tf.math.is_finite(log_propo), log_propo, tf.zeros(tf.shape(log_propo)))
 
     logw_t_prior_proposal = logw_t + tf.reduce_sum(log_prior, axis =-1) - tf.reduce_sum(log_propo, axis =-1)
 
