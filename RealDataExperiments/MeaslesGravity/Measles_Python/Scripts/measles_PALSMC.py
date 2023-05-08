@@ -2,7 +2,31 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
-@tf.function(jit_compile=True)
+def log_factorial(y_t):
+    
+    def cond(city_index, log_sum):
+
+        return city_index<40
+
+    def body(city_index, log_sum):
+
+        return city_index + 1, log_sum + tf.reduce_sum(tf.math.log(tf.linspace(tf.constant(1, dtype = tf.float32), y_t[city_index,0,0], tf.cast(y_t[city_index,0,0], dtype = tf.int64))))
+
+    output = tf.while_loop( cond, body, loop_vars=[0, tf.constant(0, dtype = tf.float32)])
+
+    return output[1]
+
+def log_correction(T, UKmeasles):
+
+    def body(input, t_obs):
+
+        UKmeasles_t = UKmeasles[:,t_obs+1:t_obs+2]
+
+        return log_factorial(tf.expand_dims(UKmeasles_t, axis =-1))
+
+    return tf.scan(body, tf.range(0, T, dtype=tf.int64), initializer = (tf.constant(0, dtype = tf.float32))) 
+
+
 def PAL_compute_infection_rate(bar_lambda_tm1, is_school_term_array_t, pop_t, p, a, beta_bar, v, xi_t):
 
     infected_prop_t = tf.einsum("pcm,c->pcm", bar_lambda_tm1[...,2:3], 1/pop_t)
@@ -15,7 +39,7 @@ def PAL_compute_infection_rate(bar_lambda_tm1, is_school_term_array_t, pop_t, p,
 
     return infection_rate
 
-@tf.function(jit_compile=True)
+
 def PAL_assemble_K(h, infection_rate, rho, gamma):
     
     prob_inf = tf.expand_dims(1-tf.exp(-h*infection_rate), axis = 2)
@@ -33,7 +57,7 @@ def PAL_assemble_K(h, infection_rate, rho, gamma):
 
     return K_t
 
-@tf.function(jit_compile=True)
+
 def PAL_scan_intermediate(bar_lambda_tprev, K_tprev, is_start_school_year_array_t_obs, intermediate_steps, UKbirths_t, c, n_cities, n_particles, delta_year):
 
     def body(input, t_intermediate):
@@ -127,7 +151,52 @@ def PAL_run(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distan
 
     return bar_lambda, likelihood, bar_Lambda, M
 
-@tf.function(jit_compile=True)
+
+def PAL_run_likelihood(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
+    
+    v = (g*measles_distance_matrix)
+
+    def cond(t_obs, input):
+    
+        return t_obs<T
+
+    def body(t_obs, input):
+
+        bar_lambda_tm1, _, log_likelihood, _ = input
+
+        pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+        pop_t = UKpop[:,pop_index]
+
+        birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+        UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+        xi_t = Xi.sample((n_particles, n_cities, 1))
+        q_t  = Q.sample((n_particles, n_cities, 1))
+
+        is_school_term_array_t = is_school_term_array[t_obs,:]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+        bar_lambda_t, likelihood_t_tm1, bar_Lambda_t, M = PAL_body_run(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, q_t, c, n_cities, n_particles, delta_year, v)
+
+        alpha_t = c*UKbirths_t*is_start_school_year_array_t_obs[-1] + ((1-c)/(26*intermediate_steps))*UKbirths_t*(1-is_start_school_year_array_t_obs[-1])
+        alpha_t = tf.expand_dims(alpha_t, axis = 0)
+        alpha_t = tf.concat((alpha_t, tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t))), axis = -1)
+
+        bar_lambda_t = tf.reduce_sum(bar_Lambda_t, axis =2) + alpha_t
+        
+        return t_obs+1, (bar_lambda_t, bar_Lambda_t, log_likelihood + tf.reduce_sum(tf.reduce_mean(likelihood_t_tm1, axis =0)), M)
+
+    bar_lambda_0 = tf.expand_dims(tf.expand_dims(initial_pop, axis =1)*pi_0, axis =0)*tf.ones((n_particles, n_cities, 4))
+    bar_Lambda_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+    likelihood_0 = tf.zeros((1), dtype=tf.float32)
+    M_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+
+    time, output = tf.while_loop( cond, body, loop_vars=[0, (bar_lambda_0, bar_Lambda_0, likelihood_0, M_0)])
+
+    return output[2]
+
 def PAL_body_run_res(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v):
 
     infection_rate = PAL_compute_infection_rate(bar_lambda_tm1, is_school_term_array_t, pop_t, p, a, beta_bar, v, xi_t)
@@ -164,7 +233,6 @@ def PAL_body_run_res(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t
     return tf.reduce_sum(bar_Lambda_t, axis = 2), likelihood_t_tm1, bar_Lambda_t, M, q_t
 
 
-@tf.function(jit_compile=True)
 def PAL_body_run_res_low(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v):
 
     infection_rate = PAL_compute_infection_rate(bar_lambda_tm1, is_school_term_array_t, pop_t, p, a, beta_bar, v, xi_t)
@@ -200,12 +268,156 @@ def PAL_body_run_res_low(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirt
     return likelihood_t_tm1, bar_Lambda_t
 
 
+def PAL_run_res(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
+    
+    v = (g*measles_distance_matrix)
+
+    def body(input, t_obs):
+
+        bar_lambda_tm1, _, _, _, _ = input
+
+        pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+        pop_t = UKpop[:,pop_index]
+
+        birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+        UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+        xi_t = Xi.sample((n_particles, n_cities, 1))
+
+        is_school_term_array_t = is_school_term_array[t_obs,0]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        is_school_term_array_t = is_school_term_array[t_obs,0]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+        bar_lambda_t, likelihood_t_tm1, bar_Lambda_t, M, q_t = PAL_body_run_res(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v)
+
+        alpha_t = c*UKbirths_t*is_start_school_year_array_t_obs[-1] + ((1-c)/(26*intermediate_steps))*UKbirths_t*(1-is_start_school_year_array_t_obs[-1])
+        alpha_t = tf.expand_dims(alpha_t, axis = 0)
+        alpha_t = tf.concat((alpha_t, tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t))), axis = -1)
+
+        bar_lambda_t = tf.reduce_sum(bar_Lambda_t, axis =2) + alpha_t
+
+        likelihood_t_tm1 = tf.where(tf.math.is_nan(likelihood_t_tm1), -500*tf.ones(tf.shape(likelihood_t_tm1)), likelihood_t_tm1)
+        likelihood_t_tm1_flow = tf.exp((likelihood_t_tm1)-tf.reduce_max((likelihood_t_tm1), axis =0, keepdims=True))
+        norm_weights = likelihood_t_tm1_flow/tf.reduce_sum(likelihood_t_tm1_flow, axis =0)
+
+        indeces = tfp.distributions.Categorical(probs=tf.transpose(norm_weights)).sample(n_particles)
+        res_bar_lambda_t = tf.transpose(tf.gather(tf.transpose(bar_lambda_t, [1, 0, 2   ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0, 2   ])
+
+        res_xi_t = tf.transpose(tf.gather(tf.transpose(xi_t[...,0], [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+        res_q_t = tf.transpose(tf.gather(tf.transpose(q_t[...,0,0], [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+
+        return res_bar_lambda_t, likelihood_t_tm1, M, res_xi_t, res_q_t
+
+    bar_lambda_0 = tf.expand_dims(tf.expand_dims(initial_pop, axis =1)*pi_0, axis =0)*tf.ones((n_particles, n_cities, 4))
+    bar_Lambda_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+    likelihood_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    xi_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    q_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    M_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+
+    bar_lambda, res_likelihood, M, xi, q = tf.scan(body, tf.range(0, T, dtype=tf.int64), initializer = (bar_lambda_0, likelihood_0, M_0, xi_0, q_0)) 
+
+    return bar_lambda, res_likelihood, M, xi, q
+
+
+def PAL_run_res_res_corr(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
+    
+    v = (g*measles_distance_matrix)
+
+    def body(input, t_obs):
+
+        bar_lambda_tm1, log_weights_tm1, log_alpha_tm1, _, _, _ = input 
+
+        # Resampling with correction
+        log_alpha_tm1_corrected = tf.where(tf.math.is_nan(log_alpha_tm1), -500*tf.ones(tf.shape(log_alpha_tm1)), log_alpha_tm1)
+        alpha_tm1_unorm = tf.exp((log_alpha_tm1_corrected)-tf.reduce_max((log_alpha_tm1_corrected), axis =0, keepdims=True))
+        alpha_tm1 = alpha_tm1_unorm/tf.reduce_sum(alpha_tm1_unorm, axis =0)
+
+        indeces = tfp.distributions.Categorical(probs=tf.transpose(alpha_tm1)).sample(n_particles)
+        res_bar_lambda_tm1 = tf.transpose(tf.gather(tf.transpose(bar_lambda_tm1, [1, 0, 2   ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0, 2   ])
+        res_log_weights_tm1 = tf.transpose(tf.gather(tf.transpose(log_weights_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+        res_log_alpha_tm1 = tf.transpose(tf.gather(tf.transpose(log_alpha_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+        res_log_weights_tm1 = res_log_weights_tm1 - res_log_alpha_tm1
+
+        # t
+        pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+        pop_t = UKpop[:,pop_index]
+
+        birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+        UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+        xi_t = Xi.sample((n_particles, n_cities, 1))
+
+        is_school_term_array_t = is_school_term_array[t_obs,0]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+        _, log_likelihood_t_tm1, bar_Lambda_t, M_t, q_t = PAL_body_run_res(res_bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v)
+
+        alpha_t = c*UKbirths_t*is_start_school_year_array_t_obs[-1] + ((1-c)/(26*intermediate_steps))*UKbirths_t*(1-is_start_school_year_array_t_obs[-1])
+        alpha_t = tf.expand_dims(alpha_t, axis = 0)
+        alpha_t = tf.concat((alpha_t, tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t))), axis = -1)
+
+        bar_lambda_t = tf.reduce_sum(bar_Lambda_t, axis =2) + alpha_t
+
+        if t_obs<T-1:
+            # t+1
+            t_obs = t_obs+1
+            pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+            pop_t = UKpop[:,pop_index]
+
+            birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+            UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+            xi_tp1 = Xi.sample((n_particles, n_cities, 1))
+
+            is_school_term_array_t = is_school_term_array[t_obs,0]
+            is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+            UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+            _, log_likelihood_tp1_t, _, _, _ = PAL_body_run_res(bar_lambda_t, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_tp1, Q, c, n_cities, n_particles, delta_year, v)
+        
+
+            weights_flow = tf.math.exp(res_log_weights_tm1- tf.reduce_max(res_log_weights_tm1, axis =0, keepdims=True))
+            log_weights_tm1 = tf.math.log(weights_flow/tf.reduce_sum(weights_flow, axis =0, keepdims=True))
+
+            log_weights_t = log_weights_tm1 + log_likelihood_t_tm1
+            log_alpha_t = log_likelihood_tp1_t + log_weights_t
+
+            t_obs = t_obs - 1
+
+        else:
+            weights_flow = tf.math.exp(res_log_weights_tm1- tf.reduce_max(res_log_weights_tm1, axis =0, keepdims=True))
+            log_weights_tm1 = tf.math.log(weights_flow/tf.reduce_sum(weights_flow, axis =0, keepdims=True))
+
+            log_weights_t = log_weights_tm1 + log_likelihood_t_tm1
+            log_alpha_t = log_weights_t
+
+        return bar_lambda_t, log_weights_t, log_alpha_t, M_t, xi_t[...,0], q_t[...,0,0]
+
+    bar_lambda_0 = tf.expand_dims(tf.expand_dims(initial_pop, axis =1)*pi_0, axis =0)*tf.ones((n_particles, n_cities, 4))
+    log_weights_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    M_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+    xi_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    q_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    log_alpha_0   = log_weights_0
+
+    bar_lambda_0T, log_weights_0T, log_alpha_0T, M_0T, xi_0T, q_0T = tf.scan(body, tf.range(0, T, dtype=tf.int64), initializer = (bar_lambda_0, log_weights_0, log_alpha_0, M_0, xi_0, q_0)) 
+
+    return bar_lambda_0T, log_weights_0T, log_alpha_0T, M_0T, xi_0T, q_0T
+
 def PAL_run_likelihood_lookahead(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
     
     v = (g*measles_distance_matrix)
     def cond(t_obs, input):
     
-        return t_obs<T
+        return t_obs<(T-1)
 
     def body(t_obs, input):
 
@@ -279,7 +491,107 @@ def PAL_run_likelihood_lookahead(T, intermediate_steps, UKmeasles, UKbirths, UKp
 
     time, output = tf.while_loop( cond, body, loop_vars=[0, (bar_lambda_0, log_weights_0, log_alpha_0, loglikelihood_0)])
 
-    return output[3]
+    bar_lambda_tm1, log_weights_tm1, log_alpha_tm1, loglikelihood = output 
+    t_obs = time
+
+    # Resampling with correction
+    log_alpha_tm1_corrected = tf.where(tf.math.is_nan(log_alpha_tm1), -500*tf.ones(tf.shape(log_alpha_tm1)), log_alpha_tm1)
+    alpha_tm1_unorm = tf.exp((log_alpha_tm1_corrected)-tf.reduce_max((log_alpha_tm1_corrected), axis =0, keepdims=True))
+    alpha_tm1 = alpha_tm1_unorm/tf.reduce_sum(alpha_tm1_unorm, axis =0)
+
+    indeces = tfp.distributions.Categorical(probs=tf.transpose(alpha_tm1)).sample(n_particles)
+    res_bar_lambda_tm1 = tf.transpose(tf.gather(tf.transpose(bar_lambda_tm1, [1, 0, 2   ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0, 2   ])
+    res_log_weights_tm1 = tf.transpose(tf.gather(tf.transpose(log_weights_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+    res_log_alpha_tm1 = tf.transpose(tf.gather(tf.transpose(log_alpha_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+    res_log_weights_tm1 = res_log_weights_tm1 - res_log_alpha_tm1
+
+    # t
+    pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+    pop_t = UKpop[:,pop_index]
+
+    birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+    UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+    xi_t = Xi.sample((n_particles, n_cities, 1))
+
+    is_school_term_array_t = is_school_term_array[t_obs,0]
+    is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+    UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+    log_likelihood_t_tm1, _ = PAL_body_run_res_low(res_bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v)
+
+    weights_flow = tf.math.exp(res_log_weights_tm1- tf.reduce_max(res_log_weights_tm1, axis =0, keepdims=True))
+    log_weights_tm1 = tf.math.log(weights_flow/tf.reduce_sum(weights_flow, axis =0, keepdims=True))
+
+    log_weights_t = log_weights_tm1 + log_likelihood_t_tm1
+
+    likelihood_t_tm1_norm = tf.exp((log_weights_t)-tf.reduce_max((log_weights_t), axis =0, keepdims=True))
+    log_increment =  tf.reduce_sum(tf.math.log(tf.reduce_sum(likelihood_t_tm1_norm, axis =0)) + tf.reduce_max((log_weights_t), axis =0)) 
+
+    return loglikelihood + log_increment
+
+
+def PAL_run_res_res_smc(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
+    
+    v = (g*measles_distance_matrix)
+
+    def body(input, t_obs):
+
+        bar_lambda_tm1, log_weights_tm1, log_alpha_tm1, _, _, _ = input 
+
+        # Resampling with correction
+        log_alpha_tm1_corrected = tf.where(tf.math.is_nan(log_alpha_tm1), -500*tf.ones(tf.shape(log_alpha_tm1)), log_alpha_tm1)
+        alpha_tm1_unorm = tf.exp((log_alpha_tm1_corrected)-tf.reduce_max((log_alpha_tm1_corrected), axis =0, keepdims=True))
+        alpha_tm1 = alpha_tm1_unorm/tf.reduce_sum(alpha_tm1_unorm, axis =0)
+
+        indeces = tfp.distributions.Categorical(probs=tf.transpose(alpha_tm1)).sample(n_particles)
+        res_bar_lambda_tm1 = tf.transpose(tf.gather(tf.transpose(bar_lambda_tm1, [1, 0, 2   ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0, 2   ])
+        res_log_weights_tm1 = tf.transpose(tf.gather(tf.transpose(log_weights_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+        res_log_alpha_tm1 = tf.transpose(tf.gather(tf.transpose(log_alpha_tm1, [1, 0 ]), tf.transpose(indeces), axis = 1, batch_dims=1 ), [1, 0 ])
+        res_log_weights_tm1 = res_log_weights_tm1 - res_log_alpha_tm1
+
+        # t
+        pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+        pop_t = UKpop[:,pop_index]
+
+        birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+        UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+        xi_t = Xi.sample((n_particles, n_cities, 1))
+
+        is_school_term_array_t = is_school_term_array[t_obs,0]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+        _, log_likelihood_t_tm1, bar_Lambda_t, M_t, q_t = PAL_body_run_res(res_bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v)
+
+        alpha_t = c*UKbirths_t*is_start_school_year_array_t_obs[-1] + ((1-c)/(26*intermediate_steps))*UKbirths_t*(1-is_start_school_year_array_t_obs[-1])
+        alpha_t = tf.expand_dims(alpha_t, axis = 0)
+        alpha_t = tf.concat((alpha_t, tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t))), axis = -1)
+
+        bar_lambda_t = tf.reduce_sum(bar_Lambda_t, axis =2) + alpha_t
+
+        weights_flow = tf.math.exp(res_log_weights_tm1- tf.reduce_max(res_log_weights_tm1, axis =0, keepdims=True))
+        log_weights_tm1 = tf.math.log(weights_flow/tf.reduce_sum(weights_flow, axis =0, keepdims=True))
+
+        log_weights_t = log_weights_tm1 + log_likelihood_t_tm1
+
+        log_alpha_t = log_weights_t
+
+        return bar_lambda_t, log_weights_t, log_alpha_t, M_t, xi_t[...,0], q_t[...,0,0]
+
+    bar_lambda_0 = tf.expand_dims(tf.expand_dims(initial_pop, axis =1)*pi_0, axis =0)*tf.ones((n_particles, n_cities, 4))
+    log_weights_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    M_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+    xi_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    q_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    log_alpha_0   = log_weights_0
+
+    bar_lambda_0T, log_weights_0T, log_alpha_0T, M_0T, xi_0T, q_0T = tf.scan(body, tf.range(0, T, dtype=tf.int64), initializer = (bar_lambda_0, log_weights_0, log_alpha_0, M_0, xi_0, q_0)) 
+
+    return bar_lambda_0T, log_weights_0T, log_alpha_0T, M_0T, xi_0T, q_0T
 
 
 
@@ -340,3 +652,52 @@ def PAL_run_likelihood_res(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g,
     time, output = tf.while_loop( cond, body, loop_vars=[0, (bar_lambda_0, bar_Lambda_0, likelihood_0, M_0)])
 
     return output[2]
+
+
+def PAL_run_mean(T, intermediate_steps, UKmeasles, UKbirths, UKpop, g, measles_distance_matrix, initial_pop, pi_0, beta_bar, p, a, is_school_term_array, is_start_school_year_array, h, rho, gamma, Xi, Q, c, n_cities, n_particles, delta_year):
+    
+    v = (g*measles_distance_matrix)
+
+    def body(input, t_obs):
+
+        bar_lambda_tm1, _, _, _ = input
+
+        pop_index = tf.cast(t_obs/26, dtype = tf.int64)
+        pop_t = UKpop[:,pop_index]
+
+        birth_index = tf.cast(t_obs/26, dtype = tf.int64)
+        UKbirths_t  = UKbirths[:,birth_index:(birth_index+1)]
+
+        xi_t = Xi.sample((n_particles, n_cities, 1))
+
+        is_school_term_array_t = is_school_term_array[t_obs,0]
+        is_start_school_year_array_t_obs = is_start_school_year_array[t_obs, :]
+
+        UKmeasles_t = UKmeasles[:,t_obs:t_obs+1]
+
+        bar_lambda_t, likelihood_t_tm1, bar_Lambda_t, M = PAL_body_run_res(bar_lambda_tm1, intermediate_steps, UKmeasles_t, UKbirths_t, pop_t, beta_bar, p, a, is_school_term_array_t, is_start_school_year_array_t_obs, h, rho, gamma, xi_t, Q, c, n_cities, n_particles, delta_year, v)
+
+        alpha_t = c*UKbirths_t*is_start_school_year_array_t_obs[-1] + ((1-c)/(26*intermediate_steps))*UKbirths_t*(1-is_start_school_year_array_t_obs[-1])
+        alpha_t = tf.expand_dims(alpha_t, axis = 0)
+        alpha_t = tf.concat((alpha_t, tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t)), tf.zeros(tf.shape(alpha_t))), axis = -1)
+
+        bar_lambda_t = tf.reduce_sum(bar_Lambda_t, axis =2) + alpha_t
+
+        likelihood_t_tm1_flow = tf.exp((likelihood_t_tm1)-tf.reduce_max((likelihood_t_tm1), axis =0, keepdims=True))
+        norm_weights = likelihood_t_tm1_flow/tf.reduce_sum(likelihood_t_tm1_flow, axis =0)
+
+        likelihood_t_tm1_flow = tf.exp((likelihood_t_tm1)-tf.reduce_max((likelihood_t_tm1), axis =0, keepdims=True))
+        norm_weights = likelihood_t_tm1_flow/tf.reduce_sum(likelihood_t_tm1_flow, axis =0)
+
+        bar_lambda_t = tf.reduce_sum(bar_lambda_t*tf.expand_dims(norm_weights, axis =-1), axis = 0, keepdims = True)*tf.ones(tf.shape(bar_lambda_t))
+
+        return bar_lambda_t, likelihood_t_tm1, bar_Lambda_t, M
+
+    bar_lambda_0 = tf.expand_dims(tf.expand_dims(initial_pop, axis =1)*pi_0, axis =0)*tf.ones((n_particles, n_cities, 4))
+    bar_Lambda_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+    likelihood_0 = tf.zeros((n_particles, n_cities), dtype=tf.float32)
+    M_0 = tf.zeros((n_particles, n_cities, 4, 4), dtype=tf.float32)
+
+    bar_lambda, likelihood, bar_Lambda, M = tf.scan(body, tf.range(0, T, dtype=tf.int64), initializer = (bar_lambda_0, likelihood_0, bar_Lambda_0, M_0)) 
+
+    return bar_lambda, likelihood, bar_Lambda, M
